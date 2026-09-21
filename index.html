@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>PairSpace</title>
+  <style>
+    :root { color-scheme: dark light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0f0d24; color: #f3f1ff;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 26rem; padding: 2rem 1.5rem; text-align: center; }
+    h1 { margin: 0 0 .75rem; font-size: 1.6rem; letter-spacing: -.01em; }
+    p { margin: .6rem 0; line-height: 1.5; color: #c9c6ec; }
+    a, button { display: inline-block; margin-top: .6rem; padding: .65rem 1.2rem; border: 0; border-radius: 999px;
+      background: #a6b1ff; color: #141230; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
+    [hidden] { display: none !important; }
+    @media (prefers-color-scheme: light) {
+      body { background: #f4f2ff; color: #1b1840; }
+      p { color: #4b4783; }
+      a, button { background: #5a62d8; color: #fff; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>PairSpace</h1>
+    <p id="msg">Шукаємо сервер…</p>
+    <a id="open" hidden>Відкрити вручну</a>
+    <button id="retry" type="button" hidden>Спробувати ще раз</button>
+  </main>
+  <script>
+    (function () {
+      var REPO = 'Nasaroog/pairspace-link';
+      var msg = document.getElementById('msg');
+      var open = document.getElementById('open');
+      var retry = document.getElementById('retry');
+
+      function show(text, canRetry) {
+        msg.textContent = text;
+        retry.hidden = !canRetry;
+      }
+
+      function go() {
+        show('Шукаємо сервер…', false);
+        // A fresh copy every time (the query string defeats the CDN cache): the address changes whenever the server restarts.
+        fetch('https://raw.githubusercontent.com/' + REPO + '/main/current.json?t=' + Date.now(), { cache: 'no-store' })
+          .then(function (response) {
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            return response.json();
+          })
+          .then(function (data) {
+            var valid = data && data.online === true && typeof data.url === 'string' &&
+              /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(data.url);
+            if (!valid) {
+              show('Сервер зараз вимкнений. Коли його увімкнуть, ця сама адреса знову запрацює.', true);
+              return;
+            }
+            var target = data.url + '/' + location.hash;
+            open.href = target;
+            open.hidden = false;
+            location.replace(target);
+          })
+          .catch(function () {
+            show('Не вдалося дізнатися адресу сервера. Перевірте інтернет і спробуйте ще раз.', true);
+          });
+      }
+
+      retry.addEventListener('click', go);
+      go();
+    })();
+  </script>
+</body>
+</html>
