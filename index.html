@@ -41,29 +41,45 @@
         retry.hidden = !canRetry;
       }
 
+      // This static page (github.io) is itself served through a CDN that caches for ~10 minutes and
+      // ignores cache-busting query strings, so it cannot be the source of truth for an address that
+      // can change every restart. The GitHub API's file-contents endpoint caches for only ~60s and
+      // allows cross-origin reads; the same-origin copy is a fallback if the API is unreachable.
+      var API_URL = 'https://api.github.com/repos/Nasaroog/pairspace-link/contents/current.json?ref=main';
+      var FALLBACK_URL = './current.json?t=' + Date.now();
+
+      function apply(data) {
+        var valid = data && data.online === true && typeof data.url === 'string' &&
+          /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(data.url);
+        if (!valid) {
+          show('Сервер зараз вимкнений. Коли його увімкнуть, ця сама адреса знову запрацює.', true);
+          return;
+        }
+        var target = data.url + '/' + location.hash;
+        open.href = target;
+        open.hidden = false;
+        location.replace(target);
+      }
+
       function go() {
         show('Шукаємо сервер…', false);
-        // Same-origin (this Pages deploy), not raw.githubusercontent.com: that domain keeps serving a
-        // stale copy for a few minutes regardless of cache-busting query strings or no-store.
-        fetch('./current.json?t=' + Date.now(), { cache: 'no-store' })
+        fetch(API_URL, { headers: { Accept: 'application/vnd.github.raw+json' } })
           .then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status);
             return response.json();
           })
-          .then(function (data) {
-            var valid = data && data.online === true && typeof data.url === 'string' &&
-              /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(data.url);
-            if (!valid) {
-              show('Сервер зараз вимкнений. Коли його увімкнуть, ця сама адреса знову запрацює.', true);
-              return;
-            }
-            var target = data.url + '/' + location.hash;
-            open.href = target;
-            open.hidden = false;
-            location.replace(target);
-          })
+          .then(apply)
           .catch(function () {
-            show('Не вдалося дізнатися адресу сервера. Перевірте інтернет і спробуйте ще раз.', true);
+            // Rate-limited or offline: fall back to the (possibly a few minutes stale) same-origin copy.
+            fetch(FALLBACK_URL, { cache: 'no-store' })
+              .then(function (response) {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.json();
+              })
+              .then(apply)
+              .catch(function () {
+                show('Не вдалося дізнатися адресу сервера. Перевірте інтернет і спробуйте ще раз.', true);
+              });
           });
       }
 
