@@ -47,8 +47,30 @@
       // allows cross-origin reads; the same-origin copy is a fallback if the API is unreachable.
       var API_URL = 'https://api.github.com/repos/Nasaroog/pairspace-link/contents/current.json?ref=main';
       var FALLBACK_URL = './current.json?t=' + Date.now();
+      var TIMEOUT_MS = 6000;
 
-      function apply(data) {
+      // A slow/flaky connection must never leave the page stuck on "Шукаємо сервер…" forever with no
+      // way out: every fetch gets its own timeout, and `gen` drops any response from a stale, already-
+      // superseded attempt (e.g. the user hit "retry" again before the first one finished).
+      var gen = 0;
+
+      function fetchWithTimeout(url, options) {
+        options = options || {};
+        if (typeof AbortController === 'function') {
+          var controller = new AbortController();
+          var timer = setTimeout(function () { controller.abort(); }, TIMEOUT_MS);
+          options.signal = controller.signal;
+          return fetch(url, options).finally(function () { clearTimeout(timer); });
+        }
+        // Very old browsers without AbortController: race the fetch against a timeout instead.
+        return Promise.race([
+          fetch(url, options),
+          new Promise(function (_, reject) { setTimeout(function () { reject(new Error('timeout')); }, TIMEOUT_MS); })
+        ]);
+      }
+
+      function apply(myGen, data) {
+        if (myGen !== gen) return;
         var valid = data && data.online === true && typeof data.url === 'string' &&
           /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(data.url);
         if (!valid) {
@@ -61,25 +83,31 @@
         location.replace(target);
       }
 
+      function fail(myGen) {
+        if (myGen !== gen) return;
+        show('Не вдалося дізнатися адресу сервера. Перевірте інтернет і спробуйте ще раз.', true);
+      }
+
       function go() {
+        gen += 1;
+        var myGen = gen;
         show('Шукаємо сервер…', false);
-        fetch(API_URL, { headers: { Accept: 'application/vnd.github.raw+json' } })
+        fetchWithTimeout(API_URL, { headers: { Accept: 'application/vnd.github.raw+json' } })
           .then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status);
             return response.json();
           })
-          .then(apply)
+          .then(function (data) { apply(myGen, data); })
           .catch(function () {
-            // Rate-limited or offline: fall back to the (possibly a few minutes stale) same-origin copy.
-            fetch(FALLBACK_URL, { cache: 'no-store' })
+            if (myGen !== gen) return;
+            // Rate-limited, timed out or offline: fall back to the (possibly a few minutes stale) same-origin copy.
+            fetchWithTimeout(FALLBACK_URL, { cache: 'no-store' })
               .then(function (response) {
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 return response.json();
               })
-              .then(apply)
-              .catch(function () {
-                show('Не вдалося дізнатися адресу сервера. Перевірте інтернет і спробуйте ще раз.', true);
-              });
+              .then(function (data) { apply(myGen, data); })
+              .catch(function () { fail(myGen); });
           });
       }
 
