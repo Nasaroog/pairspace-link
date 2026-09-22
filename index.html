@@ -32,7 +32,6 @@
   </main>
   <script>
     (function () {
-      var REPO = 'Nasaroog/pairspace-link';
       var msg = document.getElementById('msg');
       var open = document.getElementById('open');
       var retry = document.getElementById('retry');
@@ -44,8 +43,9 @@
 
       function go() {
         show('Шукаємо сервер…', false);
-        // A fresh copy every time (the query string defeats the CDN cache): the address changes whenever the server restarts.
-        fetch('https://raw.githubusercontent.com/' + REPO + '/main/current.json?t=' + Date.now(), { cache: 'no-store' })
+        // Same-origin (this Pages deploy), not raw.githubusercontent.com: that domain keeps serving a
+        // stale copy for a few minutes regardless of cache-busting query strings or no-store.
+        fetch('./current.json?t=' + Date.now(), { cache: 'no-store' })
           .then(function (response) {
             if (!response.ok) throw new Error('HTTP ' + response.status);
             return response.json();
