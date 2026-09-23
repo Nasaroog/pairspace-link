@@ -72,7 +72,7 @@
       function apply(myGen, data) {
         if (myGen !== gen) return;
         var valid = data && data.online === true && typeof data.url === 'string' &&
-          /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(data.url);
+          /^https:\/\/[a-z0-9-]+\.(trycloudflare|onrender)\.com$/.test(data.url);
         if (!valid) {
           show('Сервер зараз вимкнений. Коли його увімкнуть, ця сама адреса знову запрацює.', true);
           return;
